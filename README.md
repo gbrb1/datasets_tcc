@@ -11,6 +11,7 @@ Para que os algoritmos de particionamento e análises sejam executados com suces
 `git clone https://github.com/gbrb1/datasets_tcc.git`
 
 2. Caso não tenha o Python instalado no seu ambiente, faça o Download da versão 3.8 ou superior
+	
 	[Download do Python](https://www.python.org/downloads/)
 
 3. Ainda com o terminal aberto e com o Python já instalado, use o pip para instalar as dependências do projeto com o comando
