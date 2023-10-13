@@ -32,11 +32,12 @@ nltk.download('vader_lexicon')
 # Definindo lista de stopwords
 stop_words = set(stopwords.words('english'))
 
-cor_positivo = '#6770f5'  # Código hexadecimal para um azul claro
-cor_negativo = '#ff5e77'  # Código hexadecimal para rosa claro
-
+# Definindo as cores utilizadas nos gráficos
+cor_positivo = '#6770f5'
+cor_negativo = '#ff5e77'
 
 # Função para limpar e processar o texto
+
 
 def process_text(text):
     # Limpa o texto, removendo menções a usuários,
@@ -51,28 +52,30 @@ def process_text(text):
     return [word for word in tokenized if word.casefold() not in stop_words]
 
 
-# Inicializar o analisador de sentimentos do Vader
+# Instanciando o analisador de sentimentos do Vader
 sia = SentimentIntensityAnalyzer()
 
-# Função para classificar os sentimentos usando Vader
+# Classificando os sentimentos usando Vader
 
 
 def nltk_sentiment(text):
     text = process_text(text)
     text = ' '.join(text)
     sentiment = sia.polarity_scores(text)
-    if sentiment['compound'] >= 0.05 and sentiment['pos'] >= 0.05:
+    if sentiment['compound'] > 0 and sentiment['pos'] > 0:
         return "POSITIVO"
     else:
         return "NEGATIVO"
 
+# Função para classificar os sentimentos
+# usando o TextBlob
 
-# Função para classificar os sentimentos usando TextBlob
+
 def textblob_sentiment(text):
     text = process_text(text)
     text = ' '.join(text)
     sentiment = TextBlob(text).sentiment.polarity
-    if sentiment >= 0.05:
+    if sentiment > 0:
         return "POSITIVO"
     else:
         return "NEGATIVO"
@@ -85,14 +88,12 @@ DATASET_COLUMNS = ["target", "text"]
 # Definindo a codificação do conjunto de dados como "ISO-8859-1".
 DATASET_ENCODING = "ISO-8859-1"
 
-
 # Lendo o arquivo CSV
 dataset_filename = os.listdir("input")[0]
 dataset_path = os.path.join("input", dataset_filename)
 print("Abrindo arquivo:", dataset_path)
 df = pd.read_csv(dataset_path, encoding=DATASET_ENCODING,
                  names=DATASET_COLUMNS)
-
 
 # Mapeando a coluna label do dataset
 decode_map = {0: "NEGATIVO", 4: "POSITIVO"}
@@ -111,7 +112,6 @@ def decode_sentiment(label):
 # lambda que passa cada valor da coluna "target" para "decode_sentiment".
 df.target = df.target.apply(lambda x: decode_sentiment(x))
 
-
 # Definindo a proporção do conjunto de teste em relação
 # ao conjunto de dados completo como 0.3 (30%).
 TEST_SIZE = 0.3
@@ -120,69 +120,73 @@ TEST_SIZE = 0.3
 # complemento do tamanho do conjunto de teste (70%).
 TRAIN_SIZE = 1 - TEST_SIZE
 
-
-# Aplicando as funções de análise de sentimentos com PNL no dataframe
+# Aplicando a função de análise de sentimentos com o Vader
+# no DataFrame
 start_time = time.time()
 df['nltk_pred'] = df['text'].apply(nltk_sentiment)
 end_time = time.time()
 process_times["Vader"] = end_time - start_time
+
+# Aplicando a função de análise de sentimentos com o TextBlob
+# no DataFrame
 start_time = time.time()
 df['textblob_pred'] = df['text'].apply(textblob_sentiment)
 end_time = time.time()
 process_times["TextBlob"] = end_time - start_time
 
-# Obtendo a acurácia do Vader e TextBlob
-print('Acurácia do Vader:', accuracy_score(df['target'], df['nltk_pred']))
-print('Relatório de classificação do Vader:\n',
-      classification_report(df['target'], df['nltk_pred']))
-print('Acurácia do TextBlob:', accuracy_score(
-    df['target'], df['textblob_pred']))
-print('Relatório de classificação do TextBlob:\n',
-      classification_report(df['target'], df['textblob_pred']))
+# Obtendo e imprimindo a acurácia do Vader e TextBlob
+print('Acurácia do Vader:',
+      accuracy_score(df['target'], df['nltk_pred']))
+print('Acurácia do TextBlob:',
+      accuracy_score(df['target'], df['textblob_pred']))
 
-# Processando os textos e transformando-os em uma lista de strings
-df['processed_text'] = df['text'].apply(lambda x: ' '.join(process_text(x)))
+# Processando os textos e transformando-os em listas de strings
+# que serão armazenadas na coluna processed_text
+df['processed_text'] = df['text'].apply(lambda x: ' '
+                                        .join(process_text(x)))
 
-# Definindo o vetorizador e a regressão logística
+# Instanciando o vetorizador
 vectorizer = TfidfVectorizer()
 
-# Convertendo textos em recursos
+# Vetorizando o texto
 X = vectorizer.fit_transform(df['processed_text'])
 y = df['target']
 
+# Utilizando o temporizador para obter um número inteiro
+# para ser utilizado como seed no parametro random_state
 current_time = int(time.time())
-
 
 # Dividindo os dados em treinamento e teste
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=TEST_SIZE, random_state=current_time)  # random_state utilizando a hora como gerador de numero pseudoaleatório
+    X, y, test_size=TEST_SIZE, random_state=current_time)
 
-# Definindo a grade de parâmetros para o gridsearch
+# Definindo a grade de parâmetros para a regressão logística
 param_grid = {
     'C': [1, 10, 20, 30, 40, 50, 100, 150],
     'penalty': ['l2'],
-    'solver': ['liblinear', 'lbfgs', 'newton-cg', 'sag', 'saga']
+    'solver': ['lbfgs'],
+    'max_iter': [250, 500, 1000]
 }
 
 # Criando uma instância do modelo de regressão logística
 start_time = time.time()
-log_reg = LogisticRegression(max_iter=1000)
+log_reg = LogisticRegression()
 
 # Criando o objeto GridSearchCV com o modelo, os parâmetros e a validação cruzada
 grid_search = GridSearchCV(
-    estimator=log_reg, param_grid=param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+    estimator=log_reg, param_grid=param_grid, cv=5, n_jobs=-1)
 
 # Executando a pesquisa em grade nos dados de treinamento
 grid_search.fit(X_train, y_train)
 
 # Obtendo os melhores hiperparâmetros encontrados
 best_params = grid_search.best_params_
-print("Melhores hiperparâmetros:", best_params)
 
 # Usando o modelo com os melhores hiperparâmetros para fazer previsões
 log_reg_best = grid_search.best_estimator_
 log_reg_preds = log_reg_best.predict(X_test)
 df['log_reg_pred'] = log_reg_best.predict(X)
+
 end_time = time.time()
 process_times["RL"] = end_time - start_time
 
@@ -203,7 +207,7 @@ mlp = MLPClassifier()
 
 # Criando um objeto GridSearchCV
 grid_search = GridSearchCV(
-    estimator=mlp, param_grid=param_grid, cv=2, n_jobs=-1)
+    estimator=mlp, param_grid=param_grid, cv=5, n_jobs=-1)
 
 # Realizando a busca em grade no conjunto de treinamento
 grid_search.fit(X_train, y_train)
@@ -221,12 +225,11 @@ df['mlp_pred'] = best_mlp_model.predict(X)
 end_time = time.time()
 process_times["MLP"] = end_time - start_time
 
-
 start_time = time.time()
+
 param_grid = {
-    'n_neighbors': [100, 151, 200],  # Valores para o número de vizinhos
-    'weights': ['uniform', 'distance'],   # Pesos a serem considerados
-    # Algoritmos de cálculo
+    'n_neighbors': [100, 151, 200],
+    'weights': ['uniform', 'distance'],
     'algorithm': ['auto', 'brute']
 }
 
@@ -234,37 +237,40 @@ param_grid = {
 knn = KNeighborsClassifier()
 
 # Criando uma instância do GridSearchCV
-grid_search = GridSearchCV(estimator=knn, param_grid=param_grid, cv=5)
+grid_search = GridSearchCV(
+    estimator=knn, param_grid=param_grid, cv=5, n_jobs=-1)
 
 # Executando a pesquisa em grade nos dados de treinamento
 grid_search.fit(X_train, y_train)
 
-# Obtendo os melhores hiperparâmetros encontrados pela pesquisa em grade
-best_params = grid_search.best_params_
-
 # Obtendo o melhor modelo treinado com os melhores hiperparâmetros
 best_knn_model = grid_search.best_estimator_
+
+# Obtendo os melhores hiperparâmetros encontrados pela pesquisa em grade
+best_params = grid_search.best_params_
 
 # Fazer previsões usando o melhor modelo
 knn_preds = best_knn_model.predict(X_test)
 df['knn_pred'] = best_knn_model.predict(X)
 
-# Calcule o tempo de processamento
+# Calculando o tempo de processamento
 end_time = time.time()
 process_times["KNN"] = end_time - start_time
-
 
 # Calculando acurácia e processando relatórios das ferramentas de ML
 print('Acurácia da regressão logística:',
       accuracy_score(y_test, log_reg_preds))
-print('Relatório de classificação da regressão logística:\n',
-      classification_report(y_test, log_reg_preds))
 print('Acurácia do MLP:', accuracy_score(y_test, mlp_preds))
-print('Relatório de classificação do MLP:\n',
-      classification_report(y_test, mlp_preds))
 print('Acurácia do KNN:', accuracy_score(y_test, knn_preds))
+
+print('Relatório de classificação da regressão logística:\n',
+      classification_report(y_test, log_reg_preds, digits=4))
+
+print('Relatório de classificação do MLP:\n',
+      classification_report(y_test, mlp_preds, digits=4))
+
 print('Relatório de classificação do KNN:\n',
-      classification_report(y_test, knn_preds))
+      classification_report(y_test, knn_preds, digits=4))
 
 # Calculando o F1-score e Recall para cada classe (positivo e negativo) usando o classification_report
 report_nltk = classification_report(
@@ -292,6 +298,7 @@ knn_recall_pos = report_knn['POSITIVO']['recall']
 knn_f1_neg = report_knn['NEGATIVO']['f1-score']
 knn_recall_neg = report_knn['NEGATIVO']['recall']
 
+
 # GRÁFICOS
 
 # Plotando um gráfico de barras com os tempos de processamento
@@ -309,7 +316,6 @@ plt.yticks(fontsize=12)
 for i, time in enumerate(times):
     plt.text(i, time, f'{time:.2f} s',
              ha='center', va='bottom', fontsize=15, fontweight='bold')
-
 
 plt.tight_layout()
 plt.show()
@@ -354,8 +360,8 @@ for label in pie[1]:
 
 plt.show()
 
-
 # Função para plotar a matriz de confusão normalizada
+
 
 def plot_confusion_matrix(cm, classes, title):
     # Normalização das matrizes
@@ -375,12 +381,10 @@ nltk_cm = confusion_matrix(df['target'], df['nltk_pred'], labels=[
 plot_confusion_matrix(
     nltk_cm, classes=['POSITIVO', 'NEGATIVO'], title='Matriz de confusão do Vader')
 
-
 textblob_cm = confusion_matrix(df['target'], df['textblob_pred'], labels=[
                                'POSITIVO', 'NEGATIVO'])
 plot_confusion_matrix(textblob_cm, classes=[
                       'POSITIVO', 'NEGATIVO'], title='Matriz de confusão do TextBlob')
-
 
 log_reg_cm = confusion_matrix(y_test, log_reg_preds, labels=[
     'POSITIVO', 'NEGATIVO'])
@@ -403,21 +407,24 @@ plot_confusion_matrix(knn_cm, classes=[
 accuracies = [accuracy_score(df['target'], df['nltk_pred']), accuracy_score(
     df['target'], df['textblob_pred']), accuracy_score(y_test, log_reg_preds), accuracy_score(y_test, mlp_preds), accuracy_score(y_test, knn_preds)]
 
+# Multiplicando as acurácias por 100 para obter porcentagens
+accuracies_percent = [accuracy * 100 for accuracy in accuracies]
+
 plt.figure(figsize=(8, 6))
 
 bars = plt.bar(['Vader', 'TextBlob', 'RL', 'MLP', 'KNN'],
-               accuracies, color=['blue', 'orange', 'green', 'purple', 'grey'])
+               accuracies_percent, color=['blue', 'orange', 'green', 'purple', 'grey'])
 plt.title('Acurácias', fontsize=15, fontweight='bold')
-plt.ylabel('Acurácia', fontsize=15, fontweight='bold')
+plt.ylabel('Acurácia (%)', fontsize=15, fontweight='bold')
 plt.xlabel('Modelo', fontsize=15, fontweight='bold')
 plt.xticks(fontsize=12)
 plt.yticks(fontsize=12)
 
-# Adicionando a acurácia acima das barras
+# Adicionando a acurácia em porcentagem acima das barras
 for bar in bars:
     yval = round(bar.get_height(), 2)
-    plt.text(bar.get_x() + bar.get_width()/2, yval + 0.01,
-             yval, ha='center', va='bottom', fontsize=12)
+    plt.text(bar.get_x() + bar.get_width()/2, yval + 0.5,
+             f'{yval}%', ha='center', va='bottom', fontsize=12)
 
 plt.tight_layout()
 plt.show()
